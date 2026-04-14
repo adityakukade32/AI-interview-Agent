@@ -24,7 +24,14 @@ app.use("/api/interview" , interviewRouter)
 app.use("/api/payment" , paymentRouter)
 
 const PORT = process.env.PORT || 6000
-app.listen(PORT , ()=>{
-    console.log(`Server running on port ${PORT}`)
+if (process.env.NODE_ENV !== "production" || !process.env.VERCEL) {
+    app.listen(PORT , ()=>{
+        console.log(`Server running on port ${PORT}`)
+        connectDb()
+    })
+} else {
+    // For Vercel Serverless execution
     connectDb()
-})
+}
+
+export default app

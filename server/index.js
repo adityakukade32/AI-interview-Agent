@@ -23,6 +23,10 @@ app.use("/api/user", userRouter)
 app.use("/api/interview" , interviewRouter)
 app.use("/api/payment" , paymentRouter)
 
+app.get("/", (req, res) => {
+    res.send("InterviewIQ Backend API is running successfully! 🚀")
+})
+
 const PORT = process.env.PORT || 6000
 if (process.env.NODE_ENV !== "production" || !process.env.VERCEL) {
     app.listen(PORT , ()=>{

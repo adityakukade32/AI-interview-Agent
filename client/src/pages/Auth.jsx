@@ -81,7 +81,7 @@ function Auth({isModel = false}) {
             <motion.button 
             onClick={async () => {
                 try {
-                    const result = await axios.post(ServerUrl + "/api/auth/google", {name: "Guest User", email: "guest@example.com"}, {withCredentials:true})
+                    const result = await axios.post(ServerUrl + "/api/auth/guest", {}, {withCredentials:true})
                     dispatch(setUserData(result.data))
                     if(!isModel) navigate("/")
                 } catch (e) {

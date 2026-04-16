@@ -6,7 +6,7 @@ import crypto from "crypto"
 export const createOrder = async (req,res) => {
     try {
         const {planId, amount, credits} = req.body;
-          if (!amount || !credits) {
+          if (!amount || !credits || !planId) {
       return res.status(400).json({ message: "Invalid plan data" });
     }
 
@@ -31,7 +31,12 @@ export const createOrder = async (req,res) => {
 
     
     } catch (error) {
-         return res.status(500).json({message:`failed to create Razorpay order ${error}`})
+        const errorMessage =
+            error?.error?.description ||
+            error?.description ||
+            error?.message ||
+            "Unable to create Razorpay order"
+         return res.status(500).json({message:errorMessage})
     }
 }
 
@@ -82,6 +87,49 @@ export const verifyPayment = async (req,res) => {
     });
 
     } catch (error) {
-         return res.status(500).json({message:`failed to verify Razorpay payment ${error}`})
+        const errorMessage =
+            error?.error?.description ||
+            error?.description ||
+            error?.message ||
+            "Unable to verify Razorpay payment"
+         return res.status(500).json({message:errorMessage})
+    }
+}
+
+export const testPaymentSuccess = async (req,res) => {
+    try {
+      const { planId, amount, credits } = req.body
+
+      if (!planId || !amount || !credits) {
+        return res.status(400).json({ message: "Invalid plan data" })
+      }
+
+      const fakeOrderId = `fake_order_${Date.now()}`
+      const fakePaymentId = `fake_pay_${Date.now()}`
+
+      await Payment.create({
+        userId: req.userId,
+        planId,
+        amount,
+        credits,
+        razorpayOrderId: fakeOrderId,
+        razorpayPaymentId: fakePaymentId,
+        status: "paid",
+      })
+
+      const updatedUser = await User.findByIdAndUpdate(
+        req.userId,
+        { $inc: { credits } },
+        { new: true }
+      )
+
+      return res.status(200).json({
+        success: true,
+        message: "Test payment marked successful and credits added",
+        user: updatedUser,
+        paymentId: fakePaymentId,
+      })
+    } catch (error) {
+      return res.status(500).json({ message: error?.message || "Test payment failed" })
     }
 }

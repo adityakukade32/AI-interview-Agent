@@ -10,6 +10,7 @@ function Pricing() {
   const navigate = useNavigate()
   const [selectedPlan, setSelectedPlan] = useState("free");
   const [loadingPlan, setLoadingPlan] = useState(null);
+  const [paymentSuccess, setPaymentSuccess] = useState(null);
   const dispatch = useDispatch()
 
   const plans = [
@@ -62,6 +63,10 @@ function Pricing() {
     try {
       setLoadingPlan(plan.id)
 
+      if (!window.Razorpay) {
+        throw new Error("Razorpay SDK failed to load. Please refresh and try again.")
+      }
+
       const amount =  
       plan.id === "basic" ? 100 :
       plan.id === "pro" ? 500 : 0;
@@ -82,12 +87,18 @@ function Pricing() {
       order_id: result.data.id,
 
       handler:async function (response) {
-        const verifypay = await axios.post(ServerUrl + "/api/payment/verify" ,response , {withCredentials:true})
-        dispatch(setUserData(verifypay.data.user))
-
-          alert("Payment Successful 🎉 Credits Added!");
-          navigate("/")
-
+        try {
+          const verifypay = await axios.post(ServerUrl + "/api/payment/verify" ,response , {withCredentials:true})
+          dispatch(setUserData(verifypay.data.user))
+          setPaymentSuccess({
+            planName: plan.name,
+            credits: plan.credits,
+            paymentId: response.razorpay_payment_id,
+          })
+        } catch (error) {
+          const message = error?.response?.data?.message || "Payment completed but verification failed. Contact support."
+          alert(message)
+        }
       },
       theme:{
         color: "#10b981",
@@ -96,12 +107,54 @@ function Pricing() {
       }
 
       const rzp = new window.Razorpay(options)
+      rzp.on("payment.failed", function (response) {
+        const message = response?.error?.description || "Payment failed. Please try again."
+        alert(message)
+      })
       rzp.open()
 
       setLoadingPlan(null);
     } catch (error) {
+     const apiMessage = error?.response?.data?.message
+     const statusCode = error?.response?.status
+     const fallbackMessage = error?.message || "Unable to start payment. Please try again."
+     const finalMessage = statusCode === 401
+      ? "Please login first to buy credits."
+      : apiMessage || fallbackMessage
+     alert(finalMessage)
      console.log(error)
      setLoadingPlan(null);
+    }
+  }
+
+  const handleTestPaymentSuccess = async (plan) => {
+    try {
+      setLoadingPlan(`test-${plan.id}`)
+      const amount =
+        plan.id === "basic" ? 100 :
+        plan.id === "pro" ? 500 : 0
+
+      const response = await axios.post(
+        ServerUrl + "/api/payment/test-success",
+        {
+          planId: plan.id,
+          amount,
+          credits: plan.credits,
+        },
+        { withCredentials: true }
+      )
+
+      dispatch(setUserData(response.data.user))
+      setPaymentSuccess({
+        planName: `${plan.name} (Test Payment)`,
+        credits: plan.credits,
+        paymentId: response.data.paymentId,
+      })
+    } catch (error) {
+      const message = error?.response?.data?.message || "Test payment failed"
+      alert(message)
+    } finally {
+      setLoadingPlan(null)
     }
   }
 
@@ -109,6 +162,36 @@ function Pricing() {
 
   return (
     <div className='min-h-screen bg-gradient-to-br from-gray-50 to-emerald-50 py-16 px-6'>
+      {paymentSuccess && (
+        <div className='max-w-6xl mx-auto mb-8 bg-emerald-50 border border-emerald-300 rounded-2xl p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4'>
+          <div>
+            <p className='text-emerald-700 font-semibold flex items-center gap-2'>
+              <FaCheckCircle />
+              Payment Successful
+            </p>
+            <p className='text-sm text-emerald-900 mt-1'>
+              {paymentSuccess.planName} activated, {paymentSuccess.credits} credits added.
+            </p>
+            <p className='text-xs text-emerald-700 mt-1'>
+              Payment ID: {paymentSuccess.paymentId}
+            </p>
+          </div>
+          <div className='flex gap-3'>
+            <button
+              onClick={() => navigate("/")}
+              className='bg-emerald-600 text-white px-4 py-2 rounded-lg font-medium hover:opacity-90'
+            >
+              Go to Home
+            </button>
+            <button
+              onClick={() => setPaymentSuccess(null)}
+              className='bg-white border border-emerald-300 text-emerald-700 px-4 py-2 rounded-lg font-medium hover:bg-emerald-100'
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className='max-w-6xl mx-auto mb-14 flex items-start gap-4'>
 
@@ -193,26 +276,38 @@ function Pricing() {
               </div>
 
               {!plan.default &&
-                <button
-                disabled={loadingPlan === plan.id}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (!isSelected) {
-                      setSelectedPlan(plan.id)
-                    } else {
-                      handlePayment(plan)
-                    }
-                  }} className={`w-full mt-8 py-3 rounded-xl font-semibold transition ${isSelected
-                    ? "bg-emerald-600 text-white hover:opacity-90"
-                    : "bg-gray-100 text-gray-700 hover:bg-emerald-50"
-                    }`}>
-                  {loadingPlan === plan.id
-                    ? "Processing..."
-                    : isSelected
-                      ? "Proceed to Pay"
-                      : "Select Plan"}
+                <div className='mt-8 space-y-3'>
+                  <button
+                    disabled={loadingPlan === plan.id || loadingPlan === `test-${plan.id}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (!isSelected) {
+                        setSelectedPlan(plan.id)
+                      } else {
+                        handlePayment(plan)
+                      }
+                    }} className={`w-full py-3 rounded-xl font-semibold transition ${isSelected
+                      ? "bg-emerald-600 text-white hover:opacity-90"
+                      : "bg-gray-100 text-gray-700 hover:bg-emerald-50"
+                      }`}>
+                    {loadingPlan === plan.id
+                      ? "Processing..."
+                      : isSelected
+                        ? "Proceed to Pay"
+                        : "Select Plan"}
+                  </button>
 
-                </button>
+                  <button
+                    disabled={loadingPlan === plan.id || loadingPlan === `test-${plan.id}`}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleTestPaymentSuccess(plan)
+                    }}
+                    className='w-full py-3 rounded-xl font-semibold transition bg-white border border-emerald-500 text-emerald-700 hover:bg-emerald-50'
+                  >
+                    {loadingPlan === `test-${plan.id}` ? "Applying..." : "Test Payment Success"}
+                  </button>
+                </div>
               }
             </motion.div>
           )

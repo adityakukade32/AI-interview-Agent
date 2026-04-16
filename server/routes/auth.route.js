@@ -1,10 +1,11 @@
 import express from "express"
-import { googleAuth, logOut } from "../controllers/auth.controller.js"
+import { googleAuth, guestAuth, logOut } from "../controllers/auth.controller.js"
 
 const authRouter = express.Router()
 
 
 authRouter.post("/google",googleAuth)
+authRouter.post("/guest",guestAuth)
 authRouter.get("/logout",logOut)
 
 
